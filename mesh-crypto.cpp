@@ -134,10 +134,14 @@ void kdf(uint8_t out[32], const uint8_t *in1, size_t in1len,
     ascon_squeeze(&ctx, out, 32);
 }
 
-static void prng_mix_from_ratchet(const uint8_t rk[32])
+/**
+ * why mix in ephemeral_priv? because it's unknown to the other side.
+ * why rk? because it's not controlled by either party (does not just come from this prng itself)
+ */
+static void prng_mix_from_ratchet(const uint8_t rk[32], const uint8_t ephemeral_priv[32])
 {
     uint8_t mix_key[32];
-    kdf(mix_key, rk, 32, NULL, 0, "PRNG-RATCHET-v1");
+    kdf(mix_key, rk, 32, ephemeral_priv, 32, "PRNG-RATCHET-v1");
     prng_absorb(mix_key, sizeof(mix_key), "RATCHET");
 }
 
@@ -260,7 +264,7 @@ static void ratchet_on_epoch_advance(PeerState *s, uint8_t their_hint, const cha
     memcpy(s->CKr_prev, old_CKr, 32);
 
     kdf(s->RK, s->RK, 32, ikm, ikm_len, (ikm_len == 96) ? "3XDH-RK" : "DH-RK");
-    prng_mix_from_ratchet(s->RK);
+    prng_mix_from_ratchet(s->RK, s->ephemeral_current_priv);
 
     printf("%s RATCHET-ADVANCE[epoch->%d] DH=%02x%02x RK=%02x%02x%02x%02x\n",
            side, epoch_next(s->epoch), dh_result[0], dh_result[1], s->RK[0], s->RK[1], s->RK[2], s->RK[3]);
@@ -298,7 +302,7 @@ static void ratchet_on_fec_decode(PeerState *s, const char *side)
     memcpy(s->CKr_prev, old_CKr, 32);
 
     kdf(s->RK, s->RK, 32, ikm, ikm_len, (ikm_len == 96) ? "3XDH-RK" : "DH-RK");
-    prng_mix_from_ratchet(s->RK);
+    prng_mix_from_ratchet(s->RK, s->ephemeral_current_priv);
 
     printf("%s RATCHET-FEC[epoch->%d] DH=%02x%02x RK=%02x%02x%02x%02x\n",
            side, epoch_next(s->epoch), dh_result[0], dh_result[1], s->RK[0], s->RK[1], s->RK[2], s->RK[3]);
