@@ -135,7 +135,7 @@ If `3XDH` mode is disabled:
 
 ```text
 dh1 = key_exchange(remote_candidate_pub, local_candidate_priv)
-RK' = KDF(RK, dh1, "DH-RK")
+RK' = KDF(RK, RK_old, dh1, "DH-RK")
 ```
 
 If `3XDH` mode is enabled (default):
@@ -145,7 +145,7 @@ dh1 = key_exchange(remote_candidate_pub, local_candidate_priv)   // E_local x E_
 dh2 = key_exchange(remote_static_pub,   local_candidate_priv)    // E_local x S_remote
 dh3 = key_exchange(remote_candidate_pub, local_static_priv)       // S_local x E_remote
 IKM = dh1 || sort_lexicographically(dh2, dh3)
-RK' = KDF(RK, IKM, "3XDH-RK")
+RK' = KDF(RK, RK_old, IKM, "3XDH-RK")
 ```
 
 Lexicographic ordering of `(dh2, dh3)` keeps both sides deterministic.
@@ -217,7 +217,8 @@ For `epoch+1` packets:
  but IMHO this is safe (since there is DH and the other side's ephemeral in the mix).
   Overall I believe that this improves matters: it will eventually save us even if our
    own local RNG is faulty as we "gain" entropy from peers in a way they can't directly
-    influence (it runs through DH and a KDF).
+    influence (it runs through DH and a KDF). To ensure the other side doesn't know what
+    we have fed we also mix-in our ephemeral secret.
 
 ## Bootstrap
 

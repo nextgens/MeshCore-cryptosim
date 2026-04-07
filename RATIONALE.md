@@ -59,14 +59,14 @@ The cool bits are:
 5) (ab)use the lack of padding verification in v1 packets to signal v2 compat in-band
 
 What remains to be decided:
-- Do we shave off an extra 1-2 bytes from the counter? If we do we are in dangerous territory (keystream reuse)
+- Do we shave off an extra 1-2 bytes from the counter? If we do we are in dangerous territory (keystream reuse): this is done already 4->2 bytes
 - Do we try to remove the hint (1 byte) and encode it in the nimble at the begining instead?
 - Are we ok with the TAG size?
 - Are we ok with the cycles per message? we could remove one layer of KDF if we had to
 - Are we ok with cycles while ratcheting? If not we could do just DH instead of 3XDH provided we didn't go too low on the TAG size
 - Are we ok with the complexity of the FEC scheme? GF^2 would probably do well enough if not better
 - Are we ok with the FEC parameters? I haven't simulated the interleaving maybe we should before we ship it
-- Are we ok with the counter being this big? If it wraps (with one way links) we get out of sync
+- Are we ok with the counter being this big/small? If it wraps (with one way links) we get out of sync and ther eis no recovery
 - CXOF instead of XOF?
 
 Points of attention:

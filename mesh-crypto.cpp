@@ -186,7 +186,6 @@ static bool peer_static_keys(const PeerState *s,
  * When 3XDH is enabled we get strong authentication for almost free.
  * 
  * TODO: we could save some cycles by doing the KDF in parts
- * TODO: mix in transcript to bind the exchange
  * TODO: rethink on whether we want 3XDH: we need authentication... it depends on
  *  the tag length we end up with
  */

@@ -160,7 +160,7 @@ Input: A_static_priv/pub, B_static_priv/pub
    // Or plain DH mode (disabled by default):
    // IKM = Ed25519_DH(remote_candidate_pending, ephemeral_candidate_priv)
 
-3. RK' = KDF(RK, IKM, "3XDH-RK" or "DH-RK")
+3. RK' = KDF(RK, RK_old, IKM, "3XDH-RK" or "DH-RK")
 
 4. CKs = KDF(RK', NULL, "CKs-first")
 5. CKr = KDF(RK', NULL, "CKr-second")
@@ -187,7 +187,7 @@ Input: A_static_priv/pub, B_static_priv/pub
    dh3 = Ed25519_DH(remote_candidate_pending, local_static_priv)
    IKM = dh1 || sort_lex(dh2, dh3)
 
-2. RK' = KDF(RK, IKM, "3XDH-RK")
+2. RK' = KDF(RK, RK_old, IKM, "3XDH-RK")
 
 3. CKr_prev = CKr
 4. CKs = KDF(RK', NULL, "CKr-second")  // Note: swapped!
@@ -311,5 +311,5 @@ else:
 2. **PRNG self-feeding:** Is absorbing ratchet output into ASCON sponge safe-ish?
 3. **FEC systematic interleaving:** Optimal for expected loss patterns?
 4. **GF(2^8) vs GF(2^16):** Is 2-byte symbol size optimal? What about parameters?
-5. **3XDH authentication:** Is static key binding necessary with AEAD already present? What kind of transcript would make sense to be mixed in?
+5. **3XDH authentication:** Is static key binding necessary with AEAD already present? What kind of transcript would make sense to be mixed in? Currently we mix in RK_old
 6. **Epoch wrap (0x0e → 0x01):** Any edge cases with late packets?
