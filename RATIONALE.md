@@ -44,29 +44,28 @@ AD[5] = fec_1 (coded symbol low byte)
 ```
 
 So the total wire-overhead per message of what is proposed is 6 (AAD)+ 8 (TAG) : 14 bytes on top of plaintext.
-The existing protocol uses a block cipher (padding to AES blocks: 16 bytes) and 2 bytes MAC, this uses a stream cipher (with no padding). On average we "win" 8 bytes by not padding and we can re-use the existing wire format with the +2MAC field.
+The existing protocol uses a block cipher (padding to AES blocks: 16 bytes) and 2 bytes MAC, this uses a stream cipher (with no padding) and a SIV construction. On average we "win" 8 bytes by not padding and we can re-use the existing wire format with the +2MAC field.
 
 Therefore our "real" overhead over the existing protocol is just 4 bytes per message on average.
 
-In terms of cycles, we're probably faster per message (except during ratcheting which happens once every ~18 messages in the same direction). We could go even faster by caching CK-R and CK-S at the cost of 64 bytes per peer or by shipping an ESP32 optimized ascon permutation (this just means merging two different parts of the reference implementation; we may do it later). In terms of RAM usage it should be reasonable (see PeerState: ~250bytes per peer, a bit more when there are actual exchanges). PeerState would need to be persisted to flash every time we ratchet, so would the PRNG seed.
+In terms of cycles, we're probably a bit slower per message (especially during ratcheting which happens once every ~18 messages in the same direction). We could go marginally faster by caching CK-R and CK-S at the cost of 64 bytes per peer or by shipping an ESP32 optimized ascon permutation (this just means merging two different parts of the reference implementation; we may do it later). In terms of RAM usage it should be reasonable (see PeerState: ~250bytes per peer, a bit more when there are actual exchanges). PeerState would need to be persisted to flash every time we ratchet, so would the PRNG seed.
 
 The cool bits are:
 0) use continuous staggered ratcheting: each packet has its own key, each ratchet has its own anti-replay window, we get PFS and PCS (so long that we have moved to different ratchets)
-1) use AAD instead of a nonce/IV (what you need is a unique IV/AAD/plaintext per key)
+1) use AAD with SIV instead of a nonce/IV (what you need is a unique IV/AAD/plaintext per key)
 2) stuff AAD with FEC data that can be used for eventual rekeying (no explicit rekey means less airtime)
 3) provide strong authentication through 3XDH: we send an ephemeral (32 bytes) but no signature (so we save 64 bytes)
 4) move from a block cipher to a stream cipher (we save ~8 bytes on average per message at the cost of disclosing plaintext length)
 5) (ab)use the lack of padding verification in v1 packets to signal v2 compat in-band
 
 What remains to be decided:
-- Do we shave off an extra 1-2 bytes from the counter? If we do we are in dangerous territory (keystream reuse): this is done already 4->2 bytes
 - Do we try to remove the hint (1 byte) and encode it in the nimble at the begining instead?
 - Are we ok with the TAG size?
 - Are we ok with the cycles per message? we could remove one layer of KDF if we had to
 - Are we ok with cycles while ratcheting? If not we could do just DH instead of 3XDH provided we didn't go too low on the TAG size
 - Are we ok with the complexity of the FEC scheme? GF^2 would probably do well enough if not better
 - Are we ok with the FEC parameters? I haven't simulated the interleaving maybe we should before we ship it
-- Are we ok with the counter being this big/small? If it wraps (with one way links) we get out of sync and ther eis no recovery
+- Are we ok with the counter being this big/small? If it wraps (with one way links) we get out of sync and there is no recovery
 - CXOF instead of XOF?
 
 Points of attention:

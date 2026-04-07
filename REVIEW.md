@@ -31,7 +31,7 @@ Decrypt(key, nonce, ciphertext, ad, tag) -> plaintext || auth_bit
 ```
 - `key`: 32 bytes (chain key)
 - `nonce`: 16 bytes
-- `tag`: 8 bytes (truncated)
+- `tag`: 8 bytes (truncated / SIV)
 
 **PRNG (ASCON sponge):**
 ```
@@ -117,9 +117,7 @@ AD[4-5] = fec_symbol (2 bytes, coded symbol for candidate recovery)
 
 ### 3.3 Nonce Construction
 
-```
-nonce = send_counter (2 bytes) || epoch (1 byte) || peer_id (13 bytes)
-```
+SIV built from KEY, AD and plaintext
 
 ---
 
@@ -258,7 +256,7 @@ else:
 ```
 1. Extract AD[0:6], TAG[8], ciphertext
 2. Select key = CKr (or CKr_prev, or tentative) per Section 5.1
-3. Construct nonce from AD[1:3] (send_counter), AD[0]&0x0f (epoch)
+3. Construct SIV/nonce from AD[1:3] (send_counter), AD[0]&0x0f (epoch)
 4. auth = Decrypt(key, nonce, ciphertext, AD, TAG)
 5. If auth fails: REJECT, do not update state
 6. If auth succeeds: accept plaintext, update recv_counter

@@ -12,7 +12,7 @@ The simulator uses:
 - `ed25519_key_exchange()` for DH material; that implementation should be fixed before going live (MATTA-2026-001 and #1632)
 - ASCON-based KDF/encrypt/decrypt helpers
 - ASCON sponge PRNG (`squeeze` directly for output bytes, `absorb` for ratchet-mix input)
-- 6-byte authenticated header (`AD`)
+- 6-byte authenticated header (`AD`) / SIV mode
 - Fountain FEC over 32-byte candidate ephemerals (16 x 2-byte symbols) in GF(256)
 - ACK-gated ratchet transitions (no packet buffering whatsoever)
 - Optional 3XDH-style ratchet input (enabled by default)
@@ -212,6 +212,7 @@ For `epoch+1` packets:
 - No ratchet commit from unauthenticated data (including `epoch+1` path).
 - No FEC-triggered state advance before TAG verification in normal path.
 - ACK signal is authenticated because it is inside AD and covered by packet key/tag.
+- We use SIV to ensure that nonce reuse is not catastrophic
 - Each ratchet derives extra mix material and absorbs it into the ASCON PRNG state.
  That's definitely guilty of the cardinal sin of feeding your PRNG with its own output
  but IMHO this is safe (since there is DH and the other side's ephemeral in the mix).

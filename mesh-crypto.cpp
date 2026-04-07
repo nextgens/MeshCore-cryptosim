@@ -43,79 +43,90 @@ static int consttime_compare(const uint8_t *a, const uint8_t *b, int len)
 /**
  * Encrypt plaintext src of length src_len with key and ad (associated data) into
  *  dest. The output format is: [TAG (8 bytes)] [CIPHERTEXT (src_len bytes)]. Returns total length.
- * The tag is computed over the key, ad, and ciphertext to authenticate all of it.
+ * 
+ * We use SIV mode to get nonce-misuse resistance.
  * 
  * The key must be uniformly random and unique for each encryption. The ad can be public
  * data that is not encrypted but should be authenticated (e.g. packet header fields).
  * 
- * The src can be empty (src_len=0) in which case only the tag is output, authenticating the key and ad.
- * 
- * This is not a streaming API, the whole plaintext must be available at once. The output buffer must have
- * enough space for TAG_SIZE + src_len bytes.
+ * This is not a streaming API, the whole plaintext must be available at once and of reasonable size
+ *  (we do two passes over it). The output buffer must have enough space for TAG_SIZE + src_len bytes.
  * 
  * This is not a general-purpose API, it is designed for encrypting packets; if you want to encrypt something else
  * you want to change the domain strings.
- * 
- * The beauty of this is that we reuse the same sponge for both encryption and authentication.
  */
+
 static int ascon_encrypt(const uint8_t* key, uint8_t* dest, const uint8_t* src,
-                         int src_len, const uint8_t* ad, int ad_len)
+                                    int src_len, const uint8_t* ad, int ad_len)
 {
     ascon_state_t ctx;
-    ascon_inithash(&ctx);
+    uint8_t siv[TAG_SIZE];
 
-    ascon_absorb(&ctx, (const uint8_t*)"MC-Ascon-v1", 11);
+    // --- 1st pass: compute SIV ---
+    ascon_inithash(&ctx);
+    ascon_absorb(&ctx, (const uint8_t*)"MC-ASCON-SIV", 12);
     ascon_absorb(&ctx, key, 32);
     ascon_absorb(&ctx, ad, ad_len);
-    if (src_len > 0) {
-        uint8_t keystream[src_len];
-        ascon_squeeze(&ctx, keystream, src_len);
+    ascon_absorb(&ctx, src, src_len);
+    ascon_squeeze(&ctx, siv, TAG_SIZE);
 
-        uint8_t *ct = dest + TAG_SIZE;
+    memcpy(dest, siv, TAG_SIZE); // store SIV at start
+
+    // --- 2nd pass: generate full keystream and encrypt ---
+    ascon_inithash(&ctx);
+    ascon_absorb(&ctx, (const uint8_t*)"MC-ASCON-SIV-ENC", 16);
+    ascon_absorb(&ctx, key, 32);
+    ascon_absorb(&ctx, siv, TAG_SIZE);
+
+    uint8_t* ct = dest + TAG_SIZE;
+    if (src_len > 0) {
+        uint8_t ks[src_len]; // full keystream
+        ascon_squeeze(&ctx, ks, src_len);
+
         for (int i = 0; i < src_len; i++)
-            ct[i] = src[i] ^ keystream[i];
-        ascon_absorb(&ctx, (const uint8_t*)"MC-Ascon-v1-tag", 15);
-        ascon_absorb(&ctx, ct, src_len);
-    } else {
-        ascon_absorb(&ctx, (const uint8_t*)"MC-Ascon-v1-tag", 15);
+            ct[i] = src[i] ^ ks[i];
     }
 
-    ascon_squeeze(&ctx, dest, TAG_SIZE);
     return TAG_SIZE + src_len;
 }
 
 static int ascon_decrypt(const uint8_t* key, uint8_t* dest, const uint8_t* src,
-                         int src_len, const uint8_t* ad, int ad_len)
+                                    int src_len, const uint8_t* ad, int ad_len)
 {
     if (src_len < TAG_SIZE) return 0;
 
-    const uint8_t* tag = src;
-    const uint8_t* ct = src + TAG_SIZE;
+    const uint8_t* siv = src;
+    const uint8_t* ct  = src + TAG_SIZE;
     int ct_len = src_len - TAG_SIZE;
 
     ascon_state_t ctx;
-    ascon_inithash(&ctx);
 
-    ascon_absorb(&ctx, (const uint8_t*)"MC-Ascon-v1", 11);
+    // --- generate full keystream and decrypt ---
+    ascon_inithash(&ctx);
+    ascon_absorb(&ctx, (const uint8_t*)"MC-ASCON-SIV-ENC", 16);
     ascon_absorb(&ctx, key, 32);
-    ascon_absorb(&ctx, ad, ad_len);
-    if (src_len > TAG_SIZE) {
-        uint8_t keystream[ct_len];
-        ascon_squeeze(&ctx, keystream, ct_len);
+    ascon_absorb(&ctx, siv, TAG_SIZE);
+
+    if (ct_len > 0) {
+        uint8_t ks[ct_len];
+        ascon_squeeze(&ctx, ks, ct_len);
 
         for (int i = 0; i < ct_len; i++)
-            dest[i] = ct[i] ^ keystream[i];
-
-        ascon_absorb(&ctx, (const uint8_t*)"MC-Ascon-v1-tag", 15);
-        ascon_absorb(&ctx, ct, ct_len);
-    } else {
-        ascon_absorb(&ctx, (const uint8_t*)"MC-Ascon-v1-tag", 15);
+            dest[i] = ct[i] ^ ks[i];
     }
-    uint8_t tag2[TAG_SIZE];
-    ascon_squeeze(&ctx, tag2, TAG_SIZE);
 
-    if (!consttime_compare(tag, tag2, TAG_SIZE))
-        return 0;
+    // --- recompute SIV for verification ---
+    ascon_inithash(&ctx);
+    ascon_absorb(&ctx, (const uint8_t*)"MC-ASCON-SIV", 12);
+    ascon_absorb(&ctx, key, 32);
+    ascon_absorb(&ctx, ad, ad_len);
+    ascon_absorb(&ctx, dest, ct_len);
+
+    uint8_t siv2[TAG_SIZE];
+    ascon_squeeze(&ctx, siv2, TAG_SIZE);
+
+    if (!consttime_compare(siv, siv2, TAG_SIZE))
+        return 0; // authentication failure
 
     return ct_len;
 }
