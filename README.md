@@ -2,7 +2,7 @@ Meshcore's crypto sucks. This is an attempt to fix it doing exactly what one sho
 
 Here is a small simulator that showcases how it would work.
 
-https://asciinema.org/a/rdbr1Ii4GIjO2XJr
+https://asciinema.org/a/nfrZc8ICNoZPTmOI
 
 I have an implementation of this in the real tree... I'm reluctant to make it public until I get some feedback though.
 
